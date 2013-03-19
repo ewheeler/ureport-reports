@@ -1,0 +1,6 @@
+Initial sketch for ureport (https://github.com/unicefuganda/ureport) poll results analysis
+
+serve the files and go to localhost:8000 to view
+    python -m SimpleHTTPServer
+
+See NOTES for more information

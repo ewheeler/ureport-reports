@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>fgm poll results</title>
+
+    <meta charset="UTF-8">
+
+    <link rel="stylesheet" type="text/css" href="dc.css"/>
+</head>
+<body>
+
+<script type="text/javascript" src="d3.min.js"></script>
+<script type="text/javascript" src="crossfilter.min.js"></script>
+<script type="text/javascript" src="queue.min.js"></script>
+<script type="text/javascript" src="dc.min.js"></script>
+<script type="text/javascript" src="colorbrewer.js"></script>
+<script type="text/javascript" src="underscore-min.js"></script>
+
+<div class="container">
+    <div id="ug-chart">
+        <a class="reset" href="javascript:ugChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+        <span class="reset" style="display: none;"> | Current filter: <span class="filter"></span></span>
+
+        <div class="clearfix"></div>
+    </div>
+
+    <div class="clearfix"></div>
+
+    <div id="totals-chart">
+        <strong>By Percent Yes</strong> (y: number of responses, x: percent yes out of total, r: number of yes responses)
+        <a class="reset" href="javascript:totalsChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+
+        <div class="clearfix"></div>
+    </div>
+
+    <div class="clearfix"></div>
+
+    <div id="totals-bar-chart">
+        <strong>By Percent Yes</strong> (y: number of responses, x: percent yes out of total)
+        <a class="reset" href="javascript:totalsBarChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+
+        <div class="clearfix"></div>
+    </div>
+
+    <div class="clearfix"></div>
+
+    <div>
+        <a href="javascript:dc.filterAll(); dc.renderAll();">Reset All</a>
+    </div>
+
+</div>
+
+<script type="text/javascript">
+    var numberFormat = d3.format(".2f");
+
+    var ugChart = dc.geoChoroplethChart("#ug-chart");
+		var totalsChart = dc.bubbleChart("#totals-chart");
+		var totalsBarChart = dc.barChart("#totals-bar-chart");
+
+		var width = 960,
+				height = 960;
+
+		var projection = d3.geo.albers()
+				.center([33, 0])
+				// ug is slanted on albers projection,
+				// so adjust pitch and roll
+				// such that bottom of ug straight
+				// (its straigt on mercator projections,
+				// which is what most people are used to)
+				// [yaw, pitch, roll] AKA [lat, long, roll]
+				.rotate([-1, 11.5, -16.4])
+				.parallels([25, 35])
+				.scale(6000)
+				.translate([width / 2, height / 2]);
+
+		// declare some vars here so they are available
+		// in the browser console for debugging
+		var data;
+		var districts;
+		var shapes;
+
+		var pollDistricts = [];
+		var mapDistricts = [];
+
+		queue()
+			.defer(d3.json, "districts.json")
+			.defer(d3.tsv, "fgmPoll.tsv")
+			.await(ready);
+
+		function ready(error, ug, poll) {
+				// TODO handle error!
+				// TODO maybe rework so that fgmPoll.tsv is organized like this?
+				// District Answer Number
+				// District1 yes 22
+				// District1 no 11
+				// i *think* that this sort of structure
+				// would make it simpler to group by answer, so you could
+				// easily toggle between mapping percentYes to percentNo, etc
+				//
+				// add poll name to each result record
+				// TODO toggle between results from more than one poll
+        data = crossfilter(_.map(poll, function(p) {return _.defaults(p, {'poll': 'fgm'});}));
+				shapes = ug;
+
+				// debug info for comparing districts from map and from poll results
+				pollDistricts = _.pluck(poll, 'District');
+				mapDistricts = _.map(ug.features, function(d) { return d.properties.name });
+				console.log('have results, no map', _.difference(pollDistricts, mapDistricts));
+				console.log(_.difference(pollDistricts, mapDistricts).length)
+				console.log('on map, not results', _.difference(mapDistricts, pollDistricts));
+				console.log(_.difference(mapDistricts, pollDistricts).length)
+
+				// crossfilter dimension for districts
+        districts = data.dimension(function (d) {
+            return d["District"];
+        });
+
+				// crossfilter group (map-reduce) for poll result counts and stats by district
+				// see https://github.com/square/crossfilter/wiki/API-Reference#wiki-group_reduce
+        var totalAnswersByDistrict = districts.group().reduce(
+                function(p, v) {
+										// add function
+										// reduce by sum
+                    p.totalYes += +v.yes;
+                    p.totalNo += +v.no;
+                    p.totalUnknown += +v.unknown;
+										// sum sums
+										p.totalAnswers = p.totalYes + p.totalNo + p.totalUnknown;
+
+										// calculate percentages
+                    p.percentYes = p.totalYes/ p.totalAnswers * 100;
+                    p.percentNo = p.totalNo/ p.totalAnswers * 100;
+                    p.percentUnknown = p.totalUnknown / p.totalAnswers * 100;
+                    return p;
+                },
+                function(p, v) {
+										// remove function (used for incremental updates as records are filtered)
+                    p.totalYes -= +v.yes;
+                    p.totalNo -= +v.no;
+                    p.totalUnknown -= +v.unknown;
+										p.totalAnswers = p.totalYes + p.totalNo + p.totalUnknown;
+
+                    p.percentYes = p.totalYes/ p.totalAnswers * 100;
+                    p.percentNo = p.totalNo/ p.totalAnswers * 100;
+                    p.percentUnknown = p.totalUnknown / p.totalAnswers * 100;
+                    return p;
+                },
+                function() {
+										// initial function
+                    return {
+												totalYes: 0, totalNo: 0, totalUnknown: 0, totalAnswers: 0,
+												percentYes: 0, percentNo: 0, percentUnknown: 0
+                    };
+                }
+        );
+
+				ugChart.width(width)
+								.height(height)
+								.dimension(districts)
+								.projection(projection)
+                .group(totalAnswersByDistrict)
+								.valueAccessor(function (p) {
+										return p.value.percentYes;
+								})
+								// TODO look into patching dc.js so we can
+								// use topojson instead of geojson (topojson files are much smaller)
+								.overlayGeoJson(ug.features, "district", function (d) {
+										if (_.find(pollDistricts, function(x){ return x == d.properties.name; })){
+											// if district name from map is the same
+											// as district name in results, use it
+											return d.properties.name;
+										}
+										else if (d.properties.name_alt !== null){
+											// otherwise see if map district has alternates
+											var alternates = d.properties.name_alt.split('|');
+											for (n in alternates){
+												if (_.find(pollDistricts, function(x){ return x == alternates[n]; })){
+													// if alternate district name from map is the same
+													// as district name in results, use it
+													console.log('subsituting ', alternates[n], ' for ', d.properties.name);
+													return alternates[n];
+												}
+											}
+										}
+										// print debug info if district cannont be reconciled with map
+										console.log('no district named ', d.properties.name);
+										return d.properties.name;
+								})
+								// color across yellow-green-blue range
+								// with a domain of 0% yes to 100% yes
+								.colors(colorbrewer.YlGnBu[9])
+								.colorDomain([0, 100])
+								.title(function (d) {
+										return "District: " + d.key + "\n Yes: " + (d.value ? d.value.toFixed(2) : 0) + "%";
+								});
+
+            totalsChart.width((width* 1.5))
+                    .height(height)
+                    .margins({top: 10, right: 50, bottom: 30, left: 60})
+                    .dimension(districts)
+										// FIXME colors shown on chart don't make sense. WTF
+										.colors(colorbrewer.YlGnBu[9])
+										.colorDomain([0, 100])
+                    .group(totalAnswersByDistrict)
+                    .keyAccessor(function (p) {
+                        return p.value.totalAnswers;
+                    })
+                    .valueAccessor(function (p) {
+                        return p.value.percentYes;
+                    })
+                    .radiusValueAccessor(function (p) {
+                        return p.value.totalYes;
+                    })
+										// TODO calculate these domains
+                    .x(d3.scale.linear().domain([0, 5000]))
+                    .r(d3.scale.linear().domain([0, 4000]))
+                    .minRadiusWithLabel(11)
+                    .elasticY(true)
+                    .yAxisPadding(5)
+                    .elasticX(true)
+                    .xAxisPadding(200)
+                    .maxBubbleRelativeSize(0.07)
+                    .renderHorizontalGridLines(true)
+                    .renderVerticalGridLines(true)
+                    .renderLabel(true)
+                    .renderTitle(true)
+                    .title(function (p) {
+                        return p.key
+                                + "\n"
+                                + "Yes: " + p.value.totalYes+ " (" + p.value.percentYes.toFixed(2) + "%)\n"
+                                + "No: " + p.value.totalNo+  " (" + p.value.percentNo.toFixed(2) + "%)\n"
+                                + "Other: " + p.value.totalUnknown +  " (" + p.value.percentUnknown.toFixed(2) + "%)\n"
+																+ "total answers: " + p.value.totalAnswers;
+                    });
+            totalsChart.yAxis().tickFormat(function (s) {
+                return s + "%";
+            });
+            totalsChart.xAxis().tickFormat(function (s) {
+                return s;
+            });
+
+					totalsBarChart
+									.width((width* 1.5))
+									.height((height/2))
+									.margins({top: 10, right: 50, bottom: 30, left: 60})
+                  .dimension(districts)
+                  .group(totalAnswersByDistrict)
+                    .keyAccessor(function (p) {
+												// x axis positioning
+                        return p.value.percentYes;
+                    })
+                    .valueAccessor(function (p) {
+												// bar segment colors are defined in css
+												// y height of unknown
+                        return parseInt(p.value.totalUnknown);
+                    })
+									// stack y height of no
+									.stack(totalAnswersByDistrict, function(d){return parseInt(d.value.totalNo);})
+									// stack y height of yes
+									.stack(totalAnswersByDistrict, function(d){return parseInt(d.value.totalYes);})
+									.x(d3.scale.linear().domain([0, 100]))
+									.renderHorizontalGridLines(true)
+									.centerBar(false)
+									.elasticY(true)
+									.brushOn(false)
+									.title(function(d){
+											return d.key
+                                + "\n"
+                                + "Yes:\t\t" + d.value.totalYes+ "\t (" + d.value.percentYes.toFixed(2) + "%)\n"
+                                + "No:\t\t" + d.value.totalNo+  "\t (" + d.value.percentNo.toFixed(2) + "%)\n"
+                                + "Other:\t" + d.value.totalUnknown +  "\t (" + d.value.percentUnknown.toFixed(2) + "%)\n"
+																+ "Answers:\t" + d.value.totalAnswers;
+									})
+									.xAxis().ticks(5);
+
+            dc.renderAll();
+    };
+</script>
+
+</body>
+</html>
