@@ -83,8 +83,8 @@
 		var mapDistricts = [];
 
 		queue()
-			.defer(d3.json, "districts.json")
-			.defer(d3.tsv, "fgmPoll.tsv")
+			.defer(d3.json, "data/districts.json")
+			.defer(d3.tsv, "data/fgmPoll.tsv")
 			.await(ready);
 
 		function ready(error, ug, poll) {
