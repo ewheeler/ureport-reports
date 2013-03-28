@@ -82,12 +82,15 @@
 		var pollDistricts = [];
 		var mapDistricts = [];
 
+		var pollData;
+
 		queue()
 			.defer(d3.json, "data/districts.json")
-			.defer(d3.tsv, "data/fgmPoll.tsv")
+			.defer(d3.json, "data/poll_418.json")
 			.await(ready);
 
 		function ready(error, ug, poll) {
+				pollData = poll;
 				// TODO handle error!
 				// TODO maybe rework so that fgmPoll.tsv is organized like this?
 				// District Answer Number
@@ -99,12 +102,14 @@
 				//
 				// add poll name to each result record
 				// TODO toggle between results from more than one poll
-        data = crossfilter(_.map(poll, function(p) {return _.defaults(p, {'poll': 'fgm'});}));
+        data = crossfilter(poll.objects);
+				// TODO uppercase district names in the geojson file instead of in the browser
+				ug.features = _.map(ug.features, function(d) {d.properties.name = d.properties.name.toUpperCase(); return d; });
 				shapes = ug;
 
 				// debug info for comparing districts from map and from poll results
-				pollDistricts = _.pluck(poll, 'District');
-				mapDistricts = _.map(ug.features, function(d) { return d.properties.name });
+				pollDistricts = _.map(poll.objects, function(d) { return d.district; });
+				mapDistricts = _.map(ug.features, function(d) { return d.properties.name; });
 				console.log('have results, no map', _.difference(pollDistricts, mapDistricts));
 				console.log(_.difference(pollDistricts, mapDistricts).length)
 				console.log('on map, not results', _.difference(mapDistricts, pollDistricts));
@@ -112,7 +117,7 @@
 
 				// crossfilter dimension for districts
         districts = data.dimension(function (d) {
-            return d["District"];
+            return d["district"];
         });
 
 				// crossfilter group (map-reduce) for poll result counts and stats by district
@@ -120,29 +125,30 @@
         var totalAnswersByDistrict = districts.group().reduce(
                 function(p, v) {
 										// add function
-										// reduce by sum
-                    p.totalYes += +v.yes;
-                    p.totalNo += +v.no;
-                    p.totalUnknown += +v.unknown;
-										// sum sums
-										p.totalAnswers = p.totalYes + p.totalNo + p.totalUnknown;
+										// reduce by sum (...although at the moment there is only one record per district)
+                    p.totalYes += +v.total_yes;
+                    p.totalNo += +v.total_no;
+                    p.totalUnknown += +v.total_unknown;
+                    p.totalUncategorized += +v.total_uncategorized;
+										p.totalAnswers = v.total;
 
 										// calculate percentages
-                    p.percentYes = p.totalYes/ p.totalAnswers * 100;
-                    p.percentNo = p.totalNo/ p.totalAnswers * 100;
-                    p.percentUnknown = p.totalUnknown / p.totalAnswers * 100;
+										p.percentYes = v.yes * 100;
+										p.percentNo = v.no * 100;
+										p.percentUnknown = v.unknown * 100;
                     return p;
                 },
                 function(p, v) {
 										// remove function (used for incremental updates as records are filtered)
-                    p.totalYes -= +v.yes;
-                    p.totalNo -= +v.no;
-                    p.totalUnknown -= +v.unknown;
-										p.totalAnswers = p.totalYes + p.totalNo + p.totalUnknown;
+                    p.totalYes -= +v.total_yes;
+                    p.totalNo -= +v.total_no;
+                    p.totalUnknown -= +v.total_unknown;
+                    p.totalUncategorized -= +v.total_uncategorized;
+										p.totalAnswers = v.total;
 
-                    p.percentYes = p.totalYes/ p.totalAnswers * 100;
-                    p.percentNo = p.totalNo/ p.totalAnswers * 100;
-                    p.percentUnknown = p.totalUnknown / p.totalAnswers * 100;
+										p.percentYes = v.yes * 100;
+										p.percentNo = v.no * 100;
+										p.percentUnknown = v.unknown * 100;
                     return p;
                 },
                 function() {
@@ -172,7 +178,7 @@
 										}
 										else if (d.properties.name_alt !== null){
 											// otherwise see if map district has alternates
-											var alternates = d.properties.name_alt.split('|');
+											var alternates = _.map(d.properties.name_alt.split('|'), function(x) { return x.toUpperCase(); });
 											for (n in alternates){
 												if (_.find(pollDistricts, function(x){ return x == alternates[n]; })){
 													// if alternate district name from map is the same
@@ -189,7 +195,10 @@
 								// color across yellow-green-blue range
 								// with a domain of 0% yes to 100% yes
 								.colors(colorbrewer.YlGnBu[9])
-								.colorDomain([0, 100])
+								// TODO domain of 0-150 gives some differentiate
+								// in color for stuff in the 70%-80% range, which
+								// on a 0-100 domain are all basically the same color
+								.colorDomain([0, 150])
 								.title(function (d) {
 										return "District: " + d.key + "\n Yes: " + (d.value ? d.value.toFixed(2) : 0) + "%";
 								});

@@ -24,3 +24,6 @@ topojson --id-property su_a3 -p name=NAME,name=name,name_alt,SCALERANK -o ug.jso
 # TODO does naturalearth have rwanda districts or just provinces?
 # if they only have provinces, look at
 # http://maps.worldbank.org/search?model=Map&page=1&query=rwanda
+
+
+curl "http://localhost:8000/geo/api/v1/polldata/?poll_id=417&api_key=07078b2778acfadc359dc9e41fe4c471080d2113&username=ewheeler&format=json" > data/poll_417.json
