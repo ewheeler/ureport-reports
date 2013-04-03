@@ -1,0 +1,229 @@
+<html>
+<meta charset="utf-8">
+
+<head>
+	<style>
+		.province.rw { fill: none; }
+		.province-label {
+			fill: #777;
+			fill-opacity: .5;
+			font-size: 20px;
+			font-weight: 300;
+			text-anchor: middle;
+			text-transform: uppercase;
+		}
+		.city,
+		.city-label {
+			fill: #aaa;
+		}
+
+		.hidden {
+			display: none;
+		}
+
+		.province-boundary {
+			fill: none;
+			/*stroke-dasharray: 2,2;*/
+			stroke-linejoin: round;
+		}
+	
+		.province-label text {
+        text-shadow: 0px 1px 3px rgba(0, 0, 0, 0.33); 
+		}
+
+		path.province:hover{
+				fill-opacity: .95;
+		}
+
+		text {
+			font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+			font-size: 10px;
+			pointer-events: none;
+		}
+
+		#info {
+			position: fixed;
+			width: 20em;
+			left: 70%;
+		}
+	</style>
+</head>
+
+<body>
+	<script src="js/d3.min.js"></script>
+	<script src="js/topojson.js"></script>
+	<script src="js/queue.min.js"></script>
+	<script src="js/crossfilter.min.js"></script>
+	<script src="js/underscore-min.js"></script>
+
+	<div id="info">
+	</div>
+
+	<div id="legend">
+	</div>
+
+	<script>
+
+	var width = 960,
+			height = 1160;
+
+	var color = d3.scale.threshold()
+			.domain([.1, .2, .3, .4, .5, .6, .7, .8, .9])
+			.range(["#f7fcf0", "#e0f3db", "#ccebc5", "#a8ddb5", "#7bccc4", "#4eb3d3", "#2b8cbe", "#0868ac", "#084081"]);
+
+	var pollItem = _.template('<li><%= key %>: <%= val %> (<%= perc %>%)</li>');
+	var pollData = _.template('<h3><%= province %></h3><h4><%= poll %> poll results</h4>');
+
+	var highlightprovince = function() {
+			var province = d3.select(this)
+				.attr("paint-order", "stroke")
+				.attr("stroke", "#ccc")
+				.attr("stroke-opacity", 1)
+				.attr("stroke-width", "2px");
+			d3.select(".province-label-" + province[0][0].lastChild.lastChild.textContent)
+				.classed("hidden", false);
+			var name = (province[0][0].lastChild.lastChild.textContent);
+			var data = provinces.filter(name).top(1)[0];
+
+			var info = d3.select('#info');
+			if (typeof data !== 'undefined') {
+				var totalEntries = _.reduce([data.yes, data.no, data.unknown], function(tot, val) {return tot + parseInt(val);}, 0);
+				var listItems = _.map(_.pairs(data), 
+					function(p) {
+						if (p[0] !== 'poll' && p[0] !== 'province' && p[0] !== '')
+							{return pollItem({'key': p[0], 'val': p[1], 'perc': ((p[1]/totalEntries) * 100).toFixed(2)});}})
+				listItems.push(pollItem({'key': 'total entries', 'val': totalEntries, 'perc': 100}));
+
+				info.html(pollData(data) + listItems.join(''));
+			} else {
+				info.html('<h3>' + name + '</h3>');
+			};
+	}
+
+	var resetprovince = function() {
+			var province = d3.select(this);
+			province.attr("stroke", province[0][0].getAttribute("fill"))
+				.attr("stroke-opacity", 0.3)
+				.attr("paint-order", "stroke")
+				.attr("stroke-width", "2px");
+			d3.select(".province-label-" + province[0][0].lastChild.lastChild.textContent)
+				.classed("hidden", true);
+	}
+
+	var svg = d3.select("body").append("svg")
+			.attr("width", width)
+			.attr("height", height);
+	
+	var pollResults = {};
+
+	function prepResults(d){
+		var yes = parseInt(d.yes);
+		var no = parseInt(d.no);
+		var unknown = parseInt(d.unknown);
+		var total = (yes + no + unknown);
+		var percentYes = yes / total;
+		if (total === 0) {
+			percentYes = 0;
+		}
+		//console.log(d.province, yes, total, percentYes);
+		pollResults[d.province] = percentYes;
+	}
+
+	function colorResult(d){
+
+		if (d.properties.name in pollResults){
+			return color(pollResults[d.properties.name]);
+		}
+	}
+
+	var mapprovinces = [];
+	var pollprovinces = [];
+	
+	queue()
+    .defer(d3.json, "rw_topodistricts.json")
+		.defer(d3.tsv, "data/rwTest.tsv")
+    .await(ready);
+
+  var results;
+	var provinces;
+	var provincesYesSum;
+	var provincesNoSum;
+	var provincesUnknownSum;
+	var provincesTotalSum;
+
+	var pollByPercentYes;
+	var pollByPercentYes2;
+  var groupPollByPercentYes;
+	var shapes;
+	function ready(error, rw, poll) {
+		shapes = rw;
+
+		var country = topojson.object(rw, rw.objects.rw_districts);
+
+		var projection = d3.geo.albers()
+				.center([33, 0])
+				.rotate([1.1, 0])
+				.parallels([25, 35])
+				.scale(10000)
+				.translate([width / 2, height / 2]);
+
+		var path = d3.geo.path()
+				.projection(projection);
+
+		svg.append("path")
+				.attr("fill", "#fff")
+				.attr("stroke", "#fff")
+				.datum(country)
+				.attr("d", path);
+
+		svg.append("path")
+				.datum(topojson.mesh(rw, rw.objects.rw_districts, function(a, b) { return a === b; }))
+				.attr("d", path)
+				.attr("stroke", "#ccc")
+				.attr("stroke-width", "2px")
+				.attr("class", "province-boundary");
+
+		svg.selectAll(".province")
+				.data(topojson.object(rw, rw.objects.rw_districts).geometries)
+			.enter().append("path")
+				.attr("fill", function(d) { return color(.1+(Math.random()*(1-.1))); })
+				.attr("stroke-opacity", 0.3)
+				.attr("stroke-width", "2px")
+				.attr("class", function(d) { return "province province-" + d.properties.name; })
+				.on("mouseover", highlightprovince)
+				.on("mouseout", resetprovince)
+				.attr("d", path)
+				.append("svg:title")
+					.text(function(d) { return d.properties.name; });
+
+		svg.selectAll(".province-label")
+				.data(topojson.object(rw, rw.objects.rw_districts).geometries)
+			.enter().append("text")
+				.attr("id", function(d) { return "province-label-" + d.properties.name; })
+				.attr("class", function(d) { return "hidden province-label-" + d.properties.name; })
+				.attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+				.attr("fill", "#fff")
+				.attr("style", "text-shadow: 0px 1px 3px rgba(0, 0, 0, 0.90); font-size: 14px;")
+				.attr("dy", ".35em")
+				.text(function(d) { return d.properties.name; });
+
+		svg.selectAll(".province")
+				.data(topojson.object(rw, rw.objects.rw_districts).geometries)
+			.enter().append("path")
+				.attr("class", function(d) { return "province " + d.id; })
+				.attr("d", path);
+
+	/*
+	// TODO get these to append to the ul!
+	var legend = d3.select("body").append("ul")
+			.data(_.zip(color.domain(), color.range()))
+		.enter().append("li")
+			.attr("style", function (d) { return "background-color: " + d[1] + ";"; })
+			.text(function(d) { return (d[0] * 100) + "% answered 'yes'"; });
+  */
+	};
+
+	</script>
+
+</body>
+</html>
