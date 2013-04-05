@@ -242,19 +242,14 @@
 										};
 										return d.properties.name;
 								})
-								// color across yellow-green-blue range
-								// with a domain of 0% yes to 100% yes
-								.colors(colorbrewer.Blues[9])
-								// TODO domain of 0-150 gives some differentiate
-								// in color for stuff in the 70%-80% range, which
-								// on a 0-100 domain are all basically the same color
+								.colors(colorbrewer.YlOrRd[9])
 								.colorDomain([0, 10])
 								.title(function (d) {
 										return d.key + "\n Risks: " + (d.value ? d.value : 0);
 								});
 
-            totalsChart.width((width* 1.5))
-                    .height(height)
+            totalsChart.width((width*.9))
+                    .height(height*.9)
                     .margins({top: 10, right: 50, bottom: 30, left: 60})
                     .dimension(districts)
                     .group(districtsGroup)
@@ -296,14 +291,14 @@
             });
 
 					totalsBarChart
-									.width((width* 1.5))
-									.height((height/2))
+									.width((width*.9))
+									.height((height*.9))
 									.margins({top: 10, right: 50, bottom: 30, left: 60})
                   .dimension(districts)
                   .group(districtsGroup)
                   .keyAccessor(function (p) {
 												// x axis positioning
-                        return _.indexOf(caseDistricts, p.key);
+                        return p.key;
                     })
                    .valueAccessor(function (p) {
 												if (p.value.countsList[0]) {
@@ -322,9 +317,8 @@
 									 .stack(districtsGroup, function(d){if (d.value.countsList[7]) {return d.value.countsList[7][1];}})
 									 .stack(districtsGroup, function(d){if (d.value.countsList[8]) {return d.value.countsList[8][1];}})
 									 .stack(districtsGroup, function(d){if (d.value.countsList[9]) {return d.value.countsList[9][1];}})
-									.x(d3.scale.linear().domain([0, caseDistricts.length]))
-									.label(function(d) { return d.key; })
-                  .renderLabel(true)
+									.xUnits(dc.units.ordinal)
+									.x(d3.scale.ordinal().domain(caseDistricts))
 									.gap(50)
 									.renderHorizontalGridLines(true)
 									.centerBar(false)
@@ -336,7 +330,7 @@
                                 + "\n"
                                 + "Risks: \n" + countsText;
 									})
-									.xAxis().ticks(0);
+									.xAxis().ticks(caseDistricts.length);
 
 
 					provincePieChart
