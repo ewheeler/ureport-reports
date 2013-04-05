@@ -10,7 +10,7 @@
 .dc-chart rect.bar:hover {
     fill-opacity: .5;
 }
-
+/*
 .dc-chart rect.stack1 {
     stroke: none;
     fill: red;
@@ -20,7 +20,7 @@
     stroke: none;
     fill: green;
 }
-
+*/
 .dc-chart rect.deselected {
     stroke: none;
     fill: #ccc;
@@ -32,7 +32,7 @@
 }
 
 .dc-chart .pie-slice {
-    fill: white;
+    fill: #111;
     font-size: 12px;
     cursor: pointer;
 }
@@ -93,7 +93,7 @@
 .dc-chart circle.dot{
     fill: steelblue;
 }
-
+/*
 .dc-chart g.stack1 path.line {
     stroke: green;
 }
@@ -109,7 +109,7 @@
 .dc-chart g.stack2 circle.dot{
     fill: red;
 }
-
+*/
 .dc-chart g.dc-tooltip path{
     fill: none;
     stroke: grey;
@@ -183,7 +183,7 @@
 }
 
 .dc-chart g.district path {
-    stroke: white;
+    stroke: #CCCCCC;
 }
 
 .dc-chart g.selected path {
