@@ -18,6 +18,16 @@
       #risks-pie-chart {
         top: 200px;
       }
+      .legend {
+        width: 4em;
+        list-style-type: none;
+        float: left;
+        padding: 0px;
+      }
+      .legend > li {
+        color: #CCC;
+        text-align: center;
+      }
     </style>
 </head>
 <body>
@@ -30,6 +40,7 @@
 <script type="text/javascript" src="js/underscore-min.js"></script>
 
 <div class="container">
+        <ol class="legend"></ol>
     <div id="rw-chart">
         <a class="reset" href="javascript:rwChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
         <span class="reset" style="display: none;"> | Current filter: <span class="filter"></span></span>
@@ -246,7 +257,7 @@
                     return d.properties.name;
                 })
                 .colors(colorbrewer.YlOrRd[9])
-                  .colorDomain([0, maxRisks])
+                .colorDomain([0, maxRisks])
                 .title(function (d) {
                     return d.key + "\n Risks: " + (d.value ? d.value : 0);
                 });
@@ -374,6 +385,27 @@
           d3.selectAll('rect.bar')
             .each(addRiskColor);
 
+          mapLegendColors = d3.scale.linear()
+              .domain(d3.range(0, 9))
+              .range(colorbrewer.YlOrRd[9]);
+
+          var legend = d3.select('.legend')
+            .attr("style", function (d) { return "margin-top: " + (height / 4) + "px;"; });
+
+          var legendItems = legend.selectAll('.legend-item')
+            .data(_.zip(mapLegendColors.domain(), mapLegendColors.range()))
+
+          legendItems.enter().append('li')
+              .attr("style", function (d) { return "background-color: " + mapLegendColors(d[0]) + ";"; })
+              .html(function(d) {
+                if (d[0] === 0){
+                  return d[0] + " risks";
+                };
+                if (d[0] === 8){
+                    return maxRisks + " risks";
+                };
+                return "&nbsp;";
+              });
     };
 </script>
 
