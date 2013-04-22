@@ -234,6 +234,13 @@
         risksGroup = risks.group().reduceSum(function(d) { return d.total; });
         riskColors = d3.scale.category20();
 
+        function enumerateCountsForDatumTitle(d) {
+          var countsText = _.map(d.value.countsList, function(x) {return x[1] + ":\t " + x[0] + "\n";}).join('');
+          return d.key + ' (' + d.value.province + ')'
+                  + "\n"
+                  + "Risks: \n" + countsText;
+        }
+
         rwChart.width(width)
                 .height(height)
                 .dimension(districts)
@@ -290,12 +297,7 @@
                     .renderVerticalGridLines(true)
                     .renderLabel(true)
                     .renderTitle(true)
-                    .title(function (p) {
-                        var countsText = _.map(p.value.countsList, function(x) {return x[1] + ":\t " + x[0] + "\n";}).join('');
-                        return p.key + ' (' + p.value.province + ')'
-                                + "\n"
-                                + "Risks: \n" + countsText;
-                    });
+                    .title(function(d){ return enumerateCountsForDatumTitle(d);} );
             totalsChart.yAxis().tickFormat(function (s) {
                 return s;
             });
@@ -337,12 +339,7 @@
                   .centerBar(false)
                   .elasticY(true)
                   .brushOn(false)
-                  .title(function(p){
-                        var countsText = _.map(p.value.countsList, function(x) {return x[1] + ":\t " + x[0] + "\n";}).join('');
-                        return p.key + ' (' + p.value.province + ')'
-                                + "\n"
-                                + "Risks: \n" + countsText;
-                  })
+                  .title(function(d){ return enumerateCountsForDatumTitle(d);} )
                   .xAxis().ticks(caseDistricts.length);
 
 
