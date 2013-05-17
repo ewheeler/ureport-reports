@@ -29,3 +29,6 @@ topojson --id-property name -p name=NAME,name=name,name_alt,SCALERANK -o ug.topo
 
 
 curl "http://localhost:8000/geo/api/v1/polldata/?poll_id=417&api_key=07078b2778acfadc359dc9e41fe4c471080d2113&username=ewheeler&format=json" > data/poll_417.json
+
+cat fgmPoll.tsv | pyp "p.split('\t')[0] + '\t' + '\t'.join([p + '000' for p in p.split('\t') if p.isdigit()])" > carto.tsv
+

@@ -108,8 +108,6 @@
         document.getElementsByTagName("form")[0].style.display = "none";
       }
 
-      // field definitions from:
-      // <http://www.census.gov/popest/data/national/totals/419/files/NST-EST419-alldata.pdf>
       var percent = (function() {
             var fmt = d3.format(".2f");
             return function(n) { return fmt(n) + "%"; };
@@ -291,9 +289,13 @@
             : [lo, d3.mean(values), hi]);
 
         // normalize the scale to positive numbers
+        // https://github.com/shawnbot/d3-cartogram/issues/3
+        // 400 seems to be a good balance of hi districts
+        // getting obviously big and lo districts still
+        // being big enough to hover over
         var scale = d3.scale.linear()
           .domain([lo, hi])
-          .range([1, 1000]);
+          .range([1, 400]);
 
         // tell the cartogram to use the scaled values
         carto.value(function(d) {

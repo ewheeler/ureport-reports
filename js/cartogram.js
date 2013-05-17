@@ -82,7 +82,7 @@
                   mass = Math.sqrt(desired / Math.PI) - radius,
                   sizeError = Math.max(area, desired) / Math.min(area, desired);
               sizeErrors.push(sizeError);
-              //console.log(o.id, "@", j, "area:", area, "value:", v, "->", desired, radius, mass, sizeError);
+              // console.log(o.id, "@", j, "area:", area, "value:", v, "->", desired, radius, mass, sizeError);
               return {
                 id:         o.id,
                 area:       area,
@@ -149,11 +149,7 @@
     }
 
     var iterations = 8,
-        projection = d3.geo.albers()
-            .center([35, 1.5])
-			      .rotate([-1, 11.5, -16.4])
-            .parallels([25, 35])
-            .scale(5000),
+        projection = d3.geo.albers(),
         properties = function(id) {
           return {};
         },
