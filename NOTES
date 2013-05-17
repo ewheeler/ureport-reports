@@ -20,6 +20,7 @@ topojson --id-property D_06_ID -p name=DNAME_2010 districts.json > topodistricts
 
 # convert and combine geojson to topojson (see also http://bost.ocks.org/mike/map/)
 topojson --id-property su_a3 -p name=NAME,name=name,name_alt,SCALERANK -o ug.json subunits.json places.json districts.json
+topojson --id-property name -p name=NAME,name=name,name_alt,SCALERANK -o ug.topojson subunits.json data/districts.json
 
 # TODO does naturalearth have rwanda districts or just provinces?
 # if they only have provinces, look at

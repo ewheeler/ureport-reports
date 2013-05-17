@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Uganda cartogram with d3 &amp; TopoJSON</title>
+    <meta charset="utf-8">
+    <script src="js/d3.js"></script>
+    <script src="js/colorbrewer.js"></script>
+    <script src="js/topojson.js"></script>
+    <script src="js/cartogram.js"></script>
+    <style type="text/css">
+
+      body {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; 
+        font-size: 14px;
+        line-height: 1.4em;
+        padding: 0;
+        margin: 0;
+      }
+
+      #container {
+        width: 800px;
+        margin: 20px auto;
+      }
+
+      h1 {
+        font-size: 200%;
+        margin: 0 0 15px 0;
+      }
+
+      h2 {
+        font-size: 160%;
+        margin: 0 0 10px 0;
+      }
+
+      p {
+        margin: 0 0 10px;
+      }
+
+      form, form > * {
+        margin: 0;
+      }
+
+      #status {
+        color: #999;
+      }
+
+      #map-container {
+        height: 500px;
+        text-align: center;
+        position: relative;
+        margin: 20px 0;
+      }
+
+      #map {
+        display: block;
+        position: absolute;
+        background: #fff;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      path.district {
+        stroke: #666;
+        stroke-width: .5;
+      }
+
+      path.district:hover {
+        stroke: #000;
+      }
+
+      form {
+        font-size: 120%;
+      }
+
+      select {
+        font-size: inherit;
+      }
+
+      #placeholder {
+        position: absolute;
+        z-index: -1;
+        display: block;
+        left: 0;
+        top: 0;
+      }
+
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <form>
+        <p>
+          <label>Scale by <select id="field"></select></label>
+          <label>in poll <select id="poll"></select></label>
+          <span id="status"></span>
+        </p>
+      </form>
+      <div id="map-container">
+        <svg id="map"></svg>
+      </div>
+    </div>
+    <script>
+
+      // hide the form if the browser doesn't do SVG,
+      // (then just let everything else fail)
+      if (!document.createElementNS) {
+        document.getElementsByTagName("form")[0].style.display = "none";
+      }
+
+      // field definitions from:
+      // <http://www.census.gov/popest/data/national/totals/419/files/NST-EST419-alldata.pdf>
+      var percent = (function() {
+            var fmt = d3.format(".2f");
+            return function(n) { return fmt(n) + "%"; };
+          })(),
+          fields = [
+            {name: "(no scale)", id: "none", polls: [419]},
+            {name: "No", id: "no", key: "no", polls: [419]},
+            {name: "Unknown", id: "unknown", key: "unknown", polls: [419]},
+            {name: "Yes", id: "yes", key: "yes", polls: [419]},
+          ],
+          polls = [418, 419],
+          fieldsById = d3.nest()
+            .key(function(d) { return d.id; })
+            .rollup(function(d) { return d[0]; })
+            .map(fields),
+          field = fields[0],
+          poll = polls[0],
+          colors = colorbrewer.RdYlBu[3]
+            .reverse()
+            .map(function(rgb) { return d3.hsl(rgb); });
+
+      var body = d3.select("body"),
+          stat = d3.select("#status");
+
+      var fieldSelect = d3.select("#field")
+        .on("change", function(e) {
+          field = fields[this.selectedIndex];
+          location.hash = "#" + [field.id, poll].join("/");
+        });
+
+      fieldSelect.selectAll("option")
+        .data(fields)
+        .enter()
+        .append("option")
+          .attr("value", function(d) { return d.id; })
+          .text(function(d) { return d.name; });
+
+      var pollSelect = d3.select("#poll")
+        .on("change", function(e) {
+          poll = polls[this.selectedIndex];
+          location.hash = "#" + [field.id, poll].join("/");
+        });
+
+      pollSelect.selectAll("option")
+        .data(polls)
+        .enter()
+        .append("option")
+          .attr("value", function(y) { return y; })
+          .text(function(y) { return y; })
+
+      var map = d3.select("#map"),
+          zoom = d3.behavior.zoom()
+            .translate([-38, 32])
+            .scale(.94)
+            .scaleExtent([0.5, 10.0])
+            .on("zoom", updateZoom),
+          layer = map.append("g")
+            .attr("id", "layer"),
+          districts = layer.append("g")
+            .attr("id", "districts")
+            .selectAll("path");
+
+      // map.call(zoom);
+      updateZoom();
+
+      function updateZoom() {
+        var scale = zoom.scale();
+        layer.attr("transform",
+          "translate(" + zoom.translate() + ") " +
+          "scale(" + [scale, scale] + ")");
+      }
+
+     var proj = d3.geo.albers();
+
+     proj.center([35, 1.5])
+			.rotate([-1, 11.5, -16.4])
+			.parallels([25, 35])
+			.scale(5000);
+
+      var topology,
+          geometries,
+          rawData,
+          dataById = {},
+          carto = d3.cartogram()
+            .projection(proj)
+            .properties(function(d) {
+              return dataById[d.id];
+            })
+            .value(function(d) {
+              return +d.properties[field];
+            });
+
+      window.onhashchange = function() {
+        parseHash();
+      };
+
+      d3.json('ug.topojson', function(topo) {
+        topology = topo;
+        geometries = topology.objects.districts.geometries;
+        d3.tsv("data/carto.tsv", function(data) {
+          rawData = data;
+          dataById = d3.nest()
+            .key(function(d) { return d.name ; })
+            .rollup(function(d) { return d[0]; })
+            .map(data);
+          init();
+        });
+      });
+
+      function init() {
+        features = carto.features(topology, geometries),
+            path = d3.geo.path()
+              .projection(proj);
+
+        districts = districts.data(features)
+          .enter()
+          .append("path")
+            .attr("class", "district")
+            .attr("id", function(d) {
+              return d.id;
+            })
+            .attr("fill", "#fafafa")
+            .attr("d", path);
+
+        districts.append("title");
+
+        parseHash();
+      }
+
+      function reset() {
+        stat.text("");
+        body.classed("updating", false);
+
+        var features = carto.features(topology, geometries),
+            path = d3.geo.path()
+              .projection(proj);
+
+        districts.data(features)
+          .transition()
+            .duration(750)
+            .ease("linear")
+            .attr("fill", "#fafafa")
+            .attr("d", path);
+
+        districts.select("title")
+          .text(function(d) {
+            return d.id;
+          });
+      }
+
+      function update() {
+        var start = Date.now();
+        body.classed("updating", true);
+
+        var key = field.key,
+            fmt = (typeof field.format === "function")
+              ? field.format
+              : d3.format(field.format || ","),
+            value = function(d) {
+			        if (typeof d.properties !== 'undefined') {
+                return +d.properties[key];
+              } else {
+                return "";
+              }
+            },
+            values = districts.data()
+              .map(value)
+              .filter(function(n) {
+                return !isNaN(n);
+              })
+              .sort(d3.ascending),
+            lo = values[0],
+            hi = values[values.length - 1];
+
+        var color = d3.scale.linear()
+          .range(colors)
+          .domain(lo < 0
+            ? [lo, 0, hi]
+            : [lo, d3.mean(values), hi]);
+
+        // normalize the scale to positive numbers
+        var scale = d3.scale.linear()
+          .domain([lo, hi])
+          .range([1, 1000]);
+
+        // tell the cartogram to use the scaled values
+        carto.value(function(d) {
+          return scale(value(d));
+        });
+
+        // generate the new features, pre-projected
+        var features = carto(topology, geometries).features;
+
+        // update the data
+        districts.data(features)
+          .select("title")
+            .text(function(d) {
+              return [d.id, fmt(value(d))].join(": ");
+            });
+
+        districts.transition()
+          .duration(750)
+          .ease("linear")
+          .attr("fill", function(d) {
+            return color(value(d));
+          })
+          .attr("d", carto.path);
+
+        var delta = (Date.now() - start) / 1000;
+        stat.text(["calculated in", delta.toFixed(1), "seconds"].join(" "));
+        body.classed("updating", false);
+      }
+
+      var deferredUpdate = (function() {
+        var timeout;
+        return function() {
+          var args = arguments;
+          clearTimeout(timeout);
+          stat.text("calculating...");
+          return timeout = setTimeout(function() {
+            update.apply(null, arguments);
+          }, 10);
+        };
+      })();
+
+      var hashish = d3.selectAll("a.hashish")
+        .datum(function() {
+          return this.href;
+        });
+
+      function parseHash() {
+        var parts = location.hash.substr(1).split("/"),
+            desiredFieldId = parts[0],
+            desiredpoll = +parts[1];
+
+        field = fieldsById[desiredFieldId] || fields[0];
+        poll = (polls.indexOf(desiredpoll) > -1) ? desiredpoll : polls[0];
+
+        fieldSelect.property("selectedIndex", fields.indexOf(field));
+
+        if (field.id === "none") {
+
+          pollSelect.attr("disabled", "disabled");
+          reset();
+
+        } else {
+
+          if (field.polls) {
+            if (field.polls.indexOf(poll) === -1) {
+              poll = field.polls[0];
+            }
+            pollSelect.selectAll("option")
+              .attr("disabled", function(y) {
+                return (field.polls.indexOf(y) === -1) ? "disabled" : null;
+              });
+          } else {
+            pollSelect.selectAll("option")
+              .attr("disabled", null);
+          }
+
+          pollSelect
+            .property("selectedIndex", polls.indexOf(poll))
+            .attr("disabled", null);
+
+          deferredUpdate();
+          location.replace("#" + [field.id, poll].join("/"));
+
+          hashish.attr("href", function(href) {
+            return href + location.hash;
+          });
+        }
+      }
+
+    </script>
+  </body>
+</html>
