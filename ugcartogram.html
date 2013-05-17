@@ -85,6 +85,14 @@
         top: 0;
       }
 
+      #chart div {
+        font: 10px sans-serif;
+        text-align: right;
+        padding: 3px;
+        margin: 1px;
+        color: white;
+      }
+
     </style>
   </head>
   <body>
@@ -96,6 +104,9 @@
           <span id="status"></span>
         </p>
       </form>
+      <div id="chart-container">
+        <div id="chart"></div>
+      </div>
       <div id="map-container">
         <svg id="map"></svg>
       </div>
@@ -118,7 +129,7 @@
             {name: "Unknown", id: "unknown", key: "unknown", polls: [419]},
             {name: "Yes", id: "yes", key: "yes", polls: [419]},
           ],
-          polls = [418, 419],
+          polls = [419],
           fieldsById = d3.nest()
             .key(function(d) { return d.id; })
             .rollup(function(d) { return d[0]; })
@@ -235,6 +246,33 @@
         districts.append("title");
 
         parseHash();
+
+        // https://github.com/mbostock/d3/wiki/Arrays#maps
+        sums = d3.map({yes: 0, no: 0, unknown: 0});
+        // calculate sums
+        sums.forEach(function(k, v){ 
+          this.set(k, d3.sum(d3.entries(dataById).map(function(d) { return parseInt(d.value[k]); })))
+        });
+ 
+        // scale bar chart width within 200px
+        x = d3.scale.linear()
+            .range([0, 200])
+            .domain([0, d3.max(sums.values())]);
+
+        // simple bar chart using divs
+        chart = d3.select("#chart")
+          .selectAll("div")
+            .data(sums.entries())
+          .enter().append("div")
+            .attr("class", function(d) { return "bar bar-" + d.key; })
+            .style("background", "#91bfdb")
+            .style("width", function(d) { return x(d.value) + "px"; })
+            .text(function(d) { return d.key; })
+            .on("click", function(e) {
+              // switch scale when bars are clicked
+              field = this.classList[1].split('-')[1];
+              location.hash = "#" + [field, poll].join("/");
+            });
       }
 
       function reset() {
@@ -256,6 +294,9 @@
           .text(function(d) {
             return d.id;
           });
+
+        d3.selectAll(".bar")
+          .style("background", "#91bfdb");
       }
 
       function update() {
@@ -323,6 +364,11 @@
         var delta = (Date.now() - start) / 1000;
         stat.text(["calculated in", delta.toFixed(1), "seconds"].join(" "));
         body.classed("updating", false);
+
+        // hightlight selected scale on bar chart
+        // and reset others
+        d3.selectAll(".bar")
+          .style("background", function(d) { return d.key === key ? "steelblue" : "#91bfdb"});
       }
 
       var deferredUpdate = (function() {
